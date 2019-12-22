@@ -1,0 +1,104 @@
+\documentclass[UTF8]{ctexart}
+\usepackage{geometry}
+\usepackage{indentfirst}
+\usepackage{hyperref}
+\usepackage{harpoon}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{subfigure}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{tikz}
+\usetikzlibrary{arrows, shapes, positioning, calc}
+\geometry{a4paper, left=1cm, right=1cm, top=2cm, bottom=2cm}
+\setlength{\parindent}{1cm}
+\renewcommand\contentsname{Content}
+\title{伊辛模型的蒙特卡洛数值计算}
+\author{段元兴}
+\date{\today}
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+\setcounter{page}{1}
+\newpage
+\tableofcontents
+\newpage
+    \section{背景介绍}
+        \indent 伊辛模型 (Ising model)是一个以物理学家恩斯特·伊辛为名的数学模型, 用于描述物质的铁磁性.
+        该模型中包含了可以用来描述单个原子磁矩的参数 $\sigma _{i}$, 其值只能为+1或-1, 分别代表自旋向上或向下,
+        这些磁矩通常会按照某种规则排列, 形成晶格, 并且在模型中会引入特定交互作用的参数, 使得相邻的自旋互相影响.
+        虽然该模型相对于物理现实是一个相当简化的模型, 但它却和铁磁性物质一样会产生相变.
+        事实上, 一个二维的方晶格伊辛模型是已知最简单而会产生相变的物理系统.\\
+        \indent 伊辛模型最早是由物理学家威廉·楞次在1920年发明的, 他把该模型当成是一个给他学生恩斯特·伊辛的问题.
+        伊辛在他一篇1924年的论文中求得了一维伊辛模型的解析解, 并且证明它不会产生相变. 二维方晶格伊辛模型相对于一维的难出许多,
+        因此其解析的描述在一段时间之后才在1943年由拉斯·昂萨格给出. 一般来说, 二维伊辛模型的解析解可由传递矩阵法求得,
+        不过也有几个和量子场论有关的解法. 对于大于三维的伊辛模型目前还没有找到解析解, 但其近似解可由诸多方法求得, 例如平均场论.\\
+        \indent 这里, 我们不再讨论严格或平均场近似的理论计算方法, 而是利用计算机数值计算给出二维周期边界条件有外场的解,
+        并观察其在不同温度和磁场下的各物理量的变化情况.
+    \section{理论推导}
+        \subsection{微正则系综}
+            \indent 在开始准备写代码之前需要进行理论推导, 对推导结果采取不同的方式进行模拟并比较结果的差异. 对于一个伊辛模型系统,
+            其哈密顿量可以写作:
+            \begin{equation}
+                H(\sigma)=-\sum\limits_{i,j}J_{ij}\sigma_i\sigma_j-\mu\sum\limits_jH_j\sigma_j
+            \end{equation}
+            其中$\sigma$代表的是整个自旋系统 (自旋组态), $J_ij$是不同晶格点相互作用的系数, 对于铁磁性物质$J_{ij}>0$, 对于反铁磁性物质$J_{ij}<0$,
+            $H_j$是外加磁场.\\
+            \indent 该系统的的组态几率是
+            \begin{equation}
+                P(\sigma)=\dfrac{e^{-\beta H(\sigma)}}{\sum\limits_\sigma e^{-\beta H(\sigma)}}
+            \end{equation}
+            物理量$f(\sigma)$是自旋组态$\sigma$的函数, 其期望值 (系综平均)为
+            \begin{equation}
+                \overline{f}=\sum\limits_\sigma P(\sigma)f(\sigma)
+            \end{equation}
+        \subsection{蒙特卡洛 (Monte Carlo)算法}
+            \indent 一个很简单的想法就是随机生成大量自旋系统来产生一个系综, 再按照上式来计算物理量的平均值.\\
+            \indent 但是这种    想法显然弊端很大, 例如在温度$T\rightarrow 0$的时候铁磁性物质的自旋应该都是同向的, 但是对于一个$N$格点的系统,
+            直接随机抽样得到自旋都同向的概率是$\dfrac{1}{2^{N-1}}$, 如果格点数量庞大, 例如256$\times$256的正方形网格, 直接抽样得到这样的系统几乎是不可能的,
+            也即是说我们不可能得到正确的结果. 所以需要引入新的方法来进行数值计算.
+        \subsection{梅特波利斯 (Metropolis)算法}
+            \indent 既然直接等概率的采样所有系统行不通, 那么可不可以按照一定概率来采样? 例如既然自旋都相同的概率为1, 如果我们事先知道了这个系统的概率是1,
+            采样时就可以直接选取这个系统然后计算:
+            \begin{equation}
+                \overline{f}=\dfrac{\sum\limits_\sigma^M f(\sigma)PP^{-1}}{\sum\limits_\sigma^M PP^{-1}}=\dfrac{\sum\limits_\sigma^M f(\sigma)}{M}
+            \end{equation}
+            其中$M$是总的采样数. 这被称之为重要性采样. 这个方法可以让最大概率的那些系统被采样的概率大大提升, 加速了整个系综平均收敛的速度.\\
+            \indent 我们面临这样一个问题: 如何在不知道整个系统的情况下得到其产生的概率? 此时需要使用马尔可夫 (Markov)过程: 首先得到一个任意态,
+            可以是随机产生的或者是同向的等等, 再设计这样一种过程: 从低概率态到达高概率态的概率大于从高概率态反过来到达低概率态的概率. 这样就能保证
+            随着系统状态的不断迁移, 整个系统是朝着高概率态移动的, 在达到稳定的时候就能开始采样并计算各个物理量的系综平均. 但是这种系统迁移需要满足两个条件:\\
+            \indent 1. 遍历性. 这个是为了满足整个整个系综都有可能被抽样的条件 (虽然有些低概率态永远不可能被抽样到).\\
+            \indent 2. 细致平衡条件. 具体来说就是稳态时从一个态$A$迁移到其他能迁移到的态$B_i$的总概率
+            \begin{equation}
+                P(A)\sum\limits_iP(A\rightarrow B_i)
+            \end{equation}
+            等于从$B_i$迁移到$A$的总概率
+            \begin{equation}
+                \sum\limits_iP(B_i)P(B_i\rightarrow A),
+            \end{equation}
+            这样就满足了整个迁移过程的稳定性, 从某种角度可以理解为概率流的散度为0. 这里采取一种最简单的方式来满足细致平衡条件:
+            \begin{equation}
+                P(A)P(A\rightarrow B_i)=P(B_i)P(B_i\rightarrow A)
+            \end{equation}
+            直接将其带入即可验证这种迁移满足细致平衡条件. 对于这里的系统迁移, 可以直接算出
+            \begin{equation}
+                \dfrac{P(A\rightarrow B)}{P(B\rightarrow A)}=\dfrac{P(B)}{P(A)}=e^{\beta(E_A-E_B)}.
+            \end{equation}
+            \indent 最后, 根据细致平衡条件带来的对迁移概率限制可以设计出如下迁移概率:
+            \begin{equation}
+                P(A\rightarrow B)=
+                \left\{
+                    \begin{array}{ll}
+                        e^{-\beta(E_A-E_B)}, &E_A-E_B<0\\
+                        1, &E_A-E_B>=0\\
+                    \end{array}
+                \right.
+            \end{equation}
+    \section{计算方法}
+        \indent 所以最后得到的计算过程是这样的:\\
+        \indent\indent 1. 首先初始化一个态, 可以是随机的或者同向的等等;\\
+        \indent\indent 2. 随机选取一个格点, 计算翻转前后其与周围格点, 磁场相互作用能的改变, 按照上面推导得到的概率来判断是否翻转;\\
+        \indent\indent 3. 检查是否达到了高概率态并且系统总能量处于稳定状态, 如果是则可以开始采样系统了;\\
+        \indent\indent 4. 对采样得到的系统进行平均.\\
+\end{document}

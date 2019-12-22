@@ -1,0 +1,7 @@
+﻿  FuckCUDA.cpp
+E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(34,13): warning C4244: 'initializing': conversion from 'unsigned __int64' to 'float', possible loss of data
+E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(51,9): warning C4244: 'return': conversion from 'unsigned __int64' to 'int', possible loss of data
+E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(68,27): warning C4305: 'initializing': truncation from 'double' to 'float'
+E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(68,45): warning C4305: 'initializing': truncation from 'double' to 'float'
+E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(98,13): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+  FuckCUDA.vcxproj -> E:\files\C++\CUDA\IsingMonteCarlo\x64\Debug\FuckCUDA.exe

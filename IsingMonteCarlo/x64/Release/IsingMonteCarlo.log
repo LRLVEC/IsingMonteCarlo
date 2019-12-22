@@ -1,0 +1,49 @@
+﻿  Compiling CUDA source file IsingMonteCarlo.cu...
+  
+  E:\files\C++\CUDA\IsingMonteCarlo\IsingMonteCarlo>"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1\bin\nvcc.exe" -gencode=arch=compute_75,code=\"sm_75,compute_75\" --use-local-env -ccbin "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Tools\MSVC\14.24.28314\bin\HostX86\x64" -x cu  -I"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1\include" -I"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1\include"     --keep-dir x64\Release -maxrregcount=0 --ptxas-options=-v --machine 64 --compile -cudart static -Xcompiler "/wd 4819"    -DWIN32 -DWIN64 -DNDEBUG -D_CONSOLE -D_MBCS -Xcompiler "/EHsc /W3 /nologo /O2 /Fdx64\Release\vc142.pdb /FS /Zi  /MT " -o x64\Release\IsingMonteCarlo.cu.obj "E:\files\C++\CUDA\IsingMonteCarlo\IsingMonteCarlo\IsingMonteCarlo.cu" 
+E:/files/C++/CUDA/IsingMonteCarlo/IsingMonteCarlo/IsingMonteCarlo.cu(281): warning : variable "subGrid" was declared but never referenced
+  
+  ptxas info    : 64448 bytes gmem, 96 bytes cmem[3]
+  ptxas info    : Compiling entry function '_Z14calcM_optimizePyPf' for 'sm_75'
+  ptxas info    : Function properties for _Z14calcM_optimizePyPf
+      0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+  ptxas info    : Used 20 registers, 368 bytes cmem[0]
+  ptxas info    : Compiling entry function '_Z5calcMPfS_' for 'sm_75'
+  ptxas info    : Function properties for _Z5calcMPfS_
+      0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+  ptxas info    : Used 62 registers, 368 bytes cmem[0]
+  ptxas info    : Compiling entry function '_Z15ising_optimize4Pyffii' for 'sm_75'
+  ptxas info    : Function properties for _Z15ising_optimize4Pyffii
+      0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+  ptxas info    : Used 4 registers, 376 bytes cmem[0]
+  ptxas info    : Compiling entry function '_Z15ising_optimize3Pyffii' for 'sm_75'
+  ptxas info    : Function properties for _Z15ising_optimize3Pyffii
+      32 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+  ptxas info    : Used 26 registers, 96 bytes smem, 376 bytes cmem[0]
+  ptxas info    : Compiling entry function '_Z15ising_optimize2Pfffffi' for 'sm_75'
+  ptxas info    : Function properties for _Z15ising_optimize2Pfffffi
+      256 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+  ptxas info    : Used 63 registers, 8320 bytes smem, 380 bytes cmem[0], 4 bytes cmem[2]
+  ptxas info    : Compiling entry function '_Z17ising_optimize1_1Pfffii' for 'sm_75'
+  ptxas info    : Function properties for _Z17ising_optimize1_1Pfffii
+      32 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+  ptxas info    : Used 43 registers, 4096 bytes smem, 376 bytes cmem[0]
+  ptxas info    : Compiling entry function '_Z15ising_optimize1Pfffii' for 'sm_75'
+  ptxas info    : Function properties for _Z15ising_optimize1Pfffii
+      32 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+  ptxas info    : Used 22 registers, 256 bytes smem, 376 bytes cmem[0]
+  ptxas info    : Compiling entry function '_Z15ising_optimize0Pfffii' for 'sm_75'
+  ptxas info    : Function properties for _Z15ising_optimize0Pfffii
+      32 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+  ptxas info    : Used 64 registers, 17424 bytes smem, 376 bytes cmem[0]
+  ptxas info    : Compiling entry function '_Z5isingPfffii' for 'sm_75'
+  ptxas info    : Function properties for _Z5isingPfffii
+      32 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+  ptxas info    : Used 19 registers, 376 bytes cmem[0]
+  IsingMonteCarlo.cu
+  device_functions.h is an internal header file and must not be used directly.  This file will be removed in a future CUDA release.  Please use cuda_runtime_api.h or cuda_runtime.h instead.
+E:/files/C++/CUDA/IsingMonteCarlo/IsingMonteCarlo/IsingMonteCarlo.cu(328): warning C4305: 'initializing': truncation from 'double' to 'float'
+E:/files/C++/CUDA/IsingMonteCarlo/IsingMonteCarlo/IsingMonteCarlo.cu(328): warning C4305: 'initializing': truncation from 'double' to 'float'
+E:/files/C++/CUDA/IsingMonteCarlo/IsingMonteCarlo/IsingMonteCarlo.cu(365): warning C4244: 'argument': conversion from 'float' to 'int', possible loss of data
+     Creating library E:\files\C++\CUDA\IsingMonteCarlo\x64\Release\IsingMonteCarlo.lib and object E:\files\C++\CUDA\IsingMonteCarlo\x64\Release\IsingMonteCarlo.exp
+  IsingMonteCarlo.vcxproj -> E:\files\C++\CUDA\IsingMonteCarlo\x64\Release\IsingMonteCarlo.exe
