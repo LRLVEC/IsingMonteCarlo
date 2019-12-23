@@ -1,0 +1,10 @@
+\contentsline {section}{\numberline {1}背景介绍}{3}{section.1}% 
+\contentsline {section}{\numberline {2}理论推导}{3}{section.2}% 
+\contentsline {subsection}{\numberline {2.1}微正则系综}{3}{subsection.2.1}% 
+\contentsline {subsection}{\numberline {2.2}蒙特卡洛 (Monte Carlo)算法}{3}{subsection.2.2}% 
+\contentsline {subsection}{\numberline {2.3}梅特波利斯 (Metropolis)算法}{3}{subsection.2.3}% 
+\contentsline {section}{\numberline {3}计算方法}{4}{section.3}% 
+\contentsline {subsection}{\numberline {3.1}随机采样}{4}{subsection.3.1}% 
+\contentsline {subsection}{\numberline {3.2}马尔科夫链}{4}{subsection.3.2}% 
+\contentsline {section}{\numberline {4}计算结果}{4}{section.4}% 
+\contentsline {subsection}{\numberline {4.1}总磁矩$M$}{5}{subsection.4.1}% 

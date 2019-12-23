@@ -1,11 +1,11 @@
 ﻿  FuckCUDA.cpp
-E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(34,13): warning C4244: 'initializing': conversion from 'unsigned __int64' to 'float', possible loss of data
+E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(34,13): warning C4244: 'initializing': conversion from 'int' to 'float', possible loss of data
 E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(51,9): warning C4244: 'return': conversion from 'unsigned __int64' to 'int', possible loss of data
-E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(68,27): warning C4305: 'initializing': truncation from 'double' to 'float'
-E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(68,45): warning C4305: 'initializing': truncation from 'double' to 'float'
-E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(98,13): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(67,16): warning C4305: 'initializing': truncation from 'double' to 'float'
+E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(68,25): warning C4305: 'initializing': truncation from 'double' to 'float'
+E:\files\C++\CUDA\IsingMonteCarlo\FuckCUDA\FuckCUDA.cpp(68,43): warning C4305: 'initializing': truncation from 'double' to 'float'
   Generating code
-  1 of 158 functions ( 0.6%) were compiled, the rest were copied from previous compilation.
+  1 of 161 functions ( 0.6%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
     0 functions had inline decision re-evaluated but remain unchanged
   Finished generating code

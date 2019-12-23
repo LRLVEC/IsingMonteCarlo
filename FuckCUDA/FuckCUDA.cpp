@@ -11,30 +11,30 @@ inline float random(float s, float t)
 	float a(fabsf(sin(s * 12.9898f + t * 78.233f)) * 43758.5453123f);
 	return a - floorf(a);
 }
-void kernel(unsigned long long* grid, float H, float T, int step, int seed, int idx)
+void kernel(unsigned long long* grid, float H, float T, int step, float seed, int idx)
 {
-	for (int c0(0); c0 < gridDim; ++c0)
+	for (int blockIdx(0); blockIdx < gridDim; ++blockIdx)
 	{
-		unsigned char* p((unsigned char*)(&grid[c0 * 4llu]));
+		unsigned char* p((unsigned char*)(&grid[blockIdx * 4llu]));
 #define get(y, x) ((grid[4*y+(x>>6)]>>(x&63))&1)
-#define set(ff) ((p[idx]^=(1<<(ff&7))))
-		int _step = step ^ (c0 % 2);
+#define set(ff) ((p[idx]^=(unsigned char(1)<<(ff&7))))
+		int _step = step ^ (blockIdx % 2);
 		int d0(idx * 8 + _step);
-		for (int c1(d0); c1 < d0 + 8; c1 += 2)
+		for (int c0(d0); c0 < d0 + 8; c0 += 2)
 		{
-			int y((c0 - 1 + gridDim) % gridDim);
-			int s1 = get(y, c1);
-			y = (c0 + 1) % gridDim;
-			s1 += get(y, c1);
-			int dx((c1 + gridDim - 1) % gridDim);
-			s1 += get(c0, dx);
-			dx = (c1 + 1) % gridDim;
-			s1 += get(c0, dx);
+			int y((blockIdx + gridDim - 1) % gridDim);
+			int s1 = get(y, c0);
+			y = (blockIdx + 1) % gridDim;
+			s1 += get(y, c0);
+			int dx((c0 + gridDim - 1) % gridDim);
+			s1 += get(blockIdx, dx);
+			dx = (c0 + 1) % gridDim;
+			s1 += get(blockIdx, dx);
 			s1 = s1 * 2 - 4;
-			float s0 = get(1, c1);
-			s0 *= 2 * (H + s1);
-			if (s0 < 0 || random(float(c1 - seed), float(idx + seed)) < expf(-s0 / T))
-				set(c1);
+			float s0 = 2 * int(get(blockIdx, c0)) - 1;
+			s0 *= H + s1;
+			if (s0 <= 0 || random(c0 - seed, blockIdx + seed) < expf(-s0 / T))
+				set(c0);
 		}
 	}
 #undef get
@@ -64,15 +64,16 @@ int main()
 	unsigned int memSize = sizeof(unsigned long long) * 4 * gridDim;
 	unsigned long long* grid((unsigned long long*)malloc(memSize));
 
-	float H1 = -0.1f, H2 = 0.1f;
-	float T, T1 = 0.1 * 2.268, T2 = 1.9 * 2.268;
-	int nH = 2;
-	int nT = 5;
-	int cycles = 1;
+	float H1 = 0.3, H2 = 0.5f;
+	float T, T1 = 1 * 2.268, T2 = 1.9 * 2.268;
+	int nH = 0;
+	int nT = 0;
+	int cycles = 100;
+	::scanf("%d", &cycles);
 	H2 -= H1;
-	H2 /= nH;
+	H2 /= nH ? nH : 1;
 	T2 -= T1;
-	T2 /= nT;
+	T2 /= nT ? nT : 1;
 	char t[100];
 	std::string answer;
 	std::mt19937 mt(0);
@@ -89,16 +90,16 @@ int main()
 				if (c0 % 2)s = 0xaaaaaaaaaaaaaaaa;
 				else s = 0x5555555555555555;
 				for (int c1(0); c1 < 4; ++c1)
-					grid[c0 * 4 + c1] = s;
+					grid[c0 * 4 + c1] = 0/*s*/;
 			}
 			timer.begin();
 			for (int c2(0); c2 < cycles; ++c2)
 			{
 				std::thread threads[32];
-				int seed(rd(mt));
-				//for (int c3(0); c3 < 32; ++c3)threads[c3] = std::thread(kernel, grid, H1, T, 0, seed, c3);
-				//for (int c3(0); c3 < 32; ++c3)threads[c3].join();
-				//seed = rd(mt);
+				float seed(rd(mt));
+				for (int c3(0); c3 < 32; ++c3)threads[c3] = std::thread(kernel, grid, H1, T, 0, seed, c3);
+				for (int c3(0); c3 < 32; ++c3)threads[c3].join();
+				seed = rd(mt);
 				for (int c3(0); c3 < 32; ++c3)threads[c3] = std::thread(kernel, grid, H1, T, 1, seed, c3);
 				for (int c3(0); c3 < 32; ++c3)threads[c3].join();
 			}
@@ -112,7 +113,7 @@ int main()
 		}
 		H1 += H2;
 	}
-	FILE* temp(::fopen("./answer_0.205_0.4.txt", "w+"));
+	FILE* temp(::fopen("./answer.txt", "w+"));
 	::fprintf(temp, "%s", answer.c_str());
 	::fclose(temp);
 }

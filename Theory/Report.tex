@@ -51,7 +51,7 @@
             \end{equation}
             物理量$f(\sigma)$是自旋组态$\sigma$的函数, 其期望值 (系综平均)为
             \begin{equation}
-                \overline{f}=\sum\limits_\sigma P(\sigma)f(\sigma)
+                \langle f\rangle=\sum\limits_\sigma P(\sigma)f(\sigma)
             \end{equation}
         \subsection{蒙特卡洛 (Monte Carlo)算法}
             \indent 一个很简单的想法就是随机生成大量自旋系统来产生一个系综, 再按照上式来计算物理量的平均值.\\
@@ -62,7 +62,7 @@
             \indent 既然直接等概率的采样所有系统行不通, 那么可不可以按照一定概率来采样? 例如既然自旋都相同的概率为1, 如果我们事先知道了这个系统的概率是1,
             采样时就可以直接选取这个系统然后计算:
             \begin{equation}
-                \overline{f}=\dfrac{\sum\limits_\sigma^M f(\sigma)PP^{-1}}{\sum\limits_\sigma^M PP^{-1}}=\dfrac{\sum\limits_\sigma^M f(\sigma)}{M}
+                \langle f\rangle=\dfrac{\sum\limits_\sigma^M f(\sigma)PP^{-1}}{\sum\limits_\sigma^M PP^{-1}}=\dfrac{\sum\limits_\sigma^M f(\sigma)}{M}
             \end{equation}
             其中$M$是总的采样数. 这被称之为重要性采样. 这个方法可以让最大概率的那些系统被采样的概率大大提升, 加速了整个系综平均收敛的速度.\\
             \indent 我们面临这样一个问题: 如何在不知道整个系统的情况下得到其产生的概率? 此时需要使用马尔可夫 (Markov)过程: 首先得到一个任意态,
@@ -96,9 +96,19 @@
                 \right.
             \end{equation}
     \section{计算方法}
-        \indent 所以最后得到的计算过程是这样的:\\
-        \indent\indent 1. 首先初始化一个态, 可以是随机的或者同向的等等;\\
-        \indent\indent 2. 随机选取一个格点, 计算翻转前后其与周围格点, 磁场相互作用能的改变, 按照上面推导得到的概率来判断是否翻转;\\
-        \indent\indent 3. 检查是否达到了高概率态并且系统总能量处于稳定状态, 如果是则可以开始采样系统了;\\
-        \indent\indent 4. 对采样得到的系统进行平均.\\
+        \subsection{随机采样}
+            \indent 1. 生成一个随机态;\\
+            \indent 2. 计算总能量$E$, 组态几率$P$, 物理量$f$等等;\\
+            \indent 3. 随机翻转一个格点, 计算能量差从而得到新的能量$E'$, 重复2直到采样到足够多的系统;\\
+            \indent 4. 计算物理量$f$的统计平均值.
+        \subsection{马尔科夫链}
+            \indent 1. 首先初始化一个态, 可以是随机的或者同向的等等;\\
+            \indent 2. 随机选取一个格点, 计算翻转前后其与周围格点, 磁场相互作用能的改变, 按照上面推导得到的概率来判断是否翻转;\\
+            \indent 3. 检查是否达到了高概率态并且系统总能量处于稳定状态, 如果是则可以开始采样系统了;\\
+            \indent 4. 对采样得到的系统进行平均.
+    \section{计算结果}
+        \indent 这里将对不同尺寸 (边长$2^k$) 的周期边界正方形网格利用如上两种方式进行计算, 统计出各个物理量随着温度$T$, 磁场强度$H$的变化情况,
+        并与理论计算结果进行对比.
+        \subsection{总磁矩$M$}
+            啊哈哈
 \end{document}

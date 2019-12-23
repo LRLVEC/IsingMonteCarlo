@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <cmath>
+
 int main()
 {
 	unsigned char a = 0;
