@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FuckCUDA", "FuckCUDA\FuckCU
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SpeedTest", "SpeedTest\SpeedTest.vcxproj", "{DA80F67A-58EA-4EC1-AB68-E5C0138DACCF}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LinkTest", "LinkTest\LinkTest.vcxproj", "{9D2DFA95-43EB-4669-8464-3C53BAB5E6EC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -37,6 +39,12 @@ Global
 		{DA80F67A-58EA-4EC1-AB68-E5C0138DACCF}.Release|x64.ActiveCfg = Release|x64
 		{DA80F67A-58EA-4EC1-AB68-E5C0138DACCF}.Release|x64.Build.0 = Release|x64
 		{DA80F67A-58EA-4EC1-AB68-E5C0138DACCF}.Release|x86.ActiveCfg = Release|x64
+		{9D2DFA95-43EB-4669-8464-3C53BAB5E6EC}.Debug|x64.ActiveCfg = Debug|x64
+		{9D2DFA95-43EB-4669-8464-3C53BAB5E6EC}.Debug|x64.Build.0 = Debug|x64
+		{9D2DFA95-43EB-4669-8464-3C53BAB5E6EC}.Debug|x86.ActiveCfg = Debug|x64
+		{9D2DFA95-43EB-4669-8464-3C53BAB5E6EC}.Release|x64.ActiveCfg = Release|x64
+		{9D2DFA95-43EB-4669-8464-3C53BAB5E6EC}.Release|x64.Build.0 = Release|x64
+		{9D2DFA95-43EB-4669-8464-3C53BAB5E6EC}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -22,6 +22,40 @@ __device__ __inline__ float random(float s, float t)
 	float a(fabsf(sin(s * 12.9898f + t * 78.233f)) * 43758.5453123f);
 	return a - floorf(a);
 }
+const dim3 IsingBlocks[8] =
+{
+	{1,1,1},//8
+	{1,1,1},//16
+	{1,1,1},//32
+	{1,1,1},//64
+	{32,1,1},//128
+	{64,1,1},//256
+	{128,1,1},//512
+	{256,1,1}//1024
+};
+const dim3 IsingThreads[8] =
+{
+	{1,1,1},//8
+	{1,1,1},//16
+	{1,1,1},//32
+	{1,1,1},//64
+	{16,4,1},//128
+	{32,4,1},//256
+	{64,4,1},//512
+	{128,4,1}//1024
+};
+const dim3 ReduceThreads[8] =
+{
+	{1,1,1},//8
+	{1,1,1},//16
+	{1,1,1},//32
+	{1,1,1},//64
+	{16,1,1},//128
+	{32,1,1},//256
+	{64,1,1},//512
+	{128,1,1}//1024
+};
+
 
 
 //__global__ void ising(float* grid, float H, float T, int dx, int seed)
@@ -222,231 +256,356 @@ __device__ __inline__ float random(float s, float t)
 //		N += countBit(grid[c0]);
 //	*M = 2.0f * N / (gridDim * gridDim) - 1.0f;
 //}
-template<unsigned int Dim>__global__ void ising(unsigned long long* grid, float H, float T, int step, float seed);
-template<unsigned int Dim>__global__ void calcBarM(unsigned long long* grid, float* M);
-template<unsigned int Dim>__global__ void addM(unsigned long long* grid, float* table);
-template<>__global__ void ising<256u>(unsigned long long* grid, float H, float T, int step, float seed)
+
+__global__ void initRandom(curandState* state, unsigned int seed)
 {
-	//gd: {64, 1, 1}, threads: {32, 4, 1}
+	int id = (threadIdx.y + blockIdx.x * blockDim.y) * blockDim.x + threadIdx.x;
+	curand_init(seed, id, 0, state + id);
+}
+void initRandom(curandState* state, int seed, unsigned int id)
+{
+	initRandom << <IsingBlocks[id], IsingThreads[id], 0, 0 >> > (state, seed);
+}
+
+//This is just used to reach balance.
+template<unsigned int Dim>__global__ void ising(unsigned long long* grid, float H, float T, int step, curandState* state)
+{
+	//For Dim == 256, 512, 1024
+	//gd: {Dim/4, 1, 1}, threads: {Dim/8, 4, 1}
 	//call time per M: 4552000000
 	//run time per M: 2210000000
-	__shared__ unsigned long long subGrid[6][4];
+	constexpr unsigned int XX = Dim / 64;
+	__shared__ unsigned long long subGrid[6][XX];
 	unsigned int yy(blockIdx.x * 4 + threadIdx.y);
-	if (threadIdx.x < 6)
-		subGrid[threadIdx.x][threadIdx.y] =
-		grid[((blockIdx.x * 4 + threadIdx.x + 255) % 256) * 4 + threadIdx.y];
+	int tid(threadIdx.y * blockDim.x + threadIdx.x);
+	if (tid < 6 * XX)
+	{
+		unsigned int gy(tid / XX);
+		unsigned int gx(tid % XX);
+		subGrid[gy][gx] = grid[((blockIdx.x * 4 + gy + Dim - 1) % Dim) * XX + gx];
+	}
 	__syncthreads();
 	unsigned char* p((unsigned char*)(subGrid[1]));
 #define get(y, x) ((subGrid[y][x>>6]>>(x&63))&1)
-#define set(ff) ((p[threadIdx.y*32+threadIdx.x]^=(1<<(ff&7))))
+#define set(ff) ((p[tid]^=(1<<(ff&7))))
 	int _step(step ^ (yy % 2));
 	int d0(threadIdx.x * 8 + _step);
 	for (int c0(d0); c0 < d0 + 8; c0 += 2)
 	{
 		int s1 = get(threadIdx.y, c0) + get(2 + threadIdx.y, c0);
-		int dx((c0 + 255) % 256);
+		int dx((c0 + Dim - 1) % Dim);
 		s1 += get(1 + threadIdx.y, dx);
-		dx = (c0 + 1) % 256;
+		dx = (c0 + 1) % Dim;
 		s1 += get(1 + threadIdx.y, dx);
 		s1 = s1 * 2 - 4;
-		float s0 = 2 * int(get(1 + threadIdx.y, c0)) - 1;
+		int ss = get(1 + threadIdx.y, c0);
+		float s0 = 2 * ss - 1;
 		s0 *= H + s1;
-		if (s0 <= 0 || random(c0 - seed, yy + seed) < expf(-s0 / T))
-			set(c0);
+		if (s0 <= 0 || curand_uniform(state + tid + blockIdx.x * blockDim.x * blockDim.y)/* random(c0 - seed, yy + seed) */ < expf(-2 * s0 / T))set(c0);
 	}
-	unsigned char* s = (unsigned char*)&grid[yy * 4];
-	s[threadIdx.x] = p[threadIdx.y * 32 + threadIdx.x];
+	unsigned char* s = (unsigned char*)&grid[yy * XX];
+	s[threadIdx.x] = p[tid];
 #undef get
 #undef set
 }
-template<>__global__ void calcBarM<256u>(unsigned long long* grid, float* M)
+//This is used to create new ensembles and count MList, EList (still need to reduce), used for many points.
+template<unsigned int Dim>__global__ void ising(unsigned long long* grid, float H, float T, int* MList, float* EList, int step, curandState* state)
 {
-	//gd: {1, 1, 1}, threads: {32, 1, 1}
-	__shared__ volatile int ahh[32];
-	int N(0);
-	grid += threadIdx.x * 32;
-	for (int c0(0); c0 < 32; ++c0)
+	constexpr unsigned int XX = Dim / 64;
+	__shared__ unsigned long long subGrid[6][XX];
+	__shared__ int dataM[Dim / 2];
+	__shared__ float dataE[Dim / 2];
+	unsigned int yy(blockIdx.x * 4 + threadIdx.y);
+	int tid(threadIdx.y * blockDim.x + threadIdx.x);
+	if (tid < 6 * XX)
 	{
-		unsigned long long gg = grid[c0];
-		unsigned int n;
-		asm("popc.b64 %0, %1;": "=r"(n) : "l"(gg));
-		N += n;
+		unsigned int gy(tid / XX);
+		unsigned int gx(tid % XX);
+		subGrid[gy][gx] = grid[((blockIdx.x * 4 + gy + Dim - 1) % Dim) * XX + gx];
 	}
-	ahh[threadIdx.x] = N;
-	if (threadIdx.x < 16)ahh[threadIdx.x] += ahh[threadIdx.x + 16];
-	if (threadIdx.x < 8)ahh[threadIdx.x] += ahh[threadIdx.x + 8];
-	if (threadIdx.x < 4)ahh[threadIdx.x] += ahh[threadIdx.x + 4];
-	if (threadIdx.x < 2)ahh[threadIdx.x] += ahh[threadIdx.x + 2];
-	if (!threadIdx.x)
+	__syncthreads();
+	int M(0);
+	float E(0);
+	unsigned char* p((unsigned char*)(subGrid[1]));
+#define get(y, x) ((subGrid[y][x>>6]>>(x&63))&1)
+#define set(ff) ((p[tid]^=(1<<(ff&7))))
+	int _step(step ^ (yy % 2));
+	int d0(threadIdx.x * 8 + _step);
+	for (int c0(d0); c0 < d0 + 8; c0 += 2)
 	{
-		N = ahh[0] + ahh[1];
-		*M = 2 * float(N) / 65536 - 1;
+		int dx((c0 + Dim - 1) % Dim);
+		int s1 = get(1 + threadIdx.y, dx); M += s1;
+		int ss = get(1 + threadIdx.y, c0); M += ss;
+		dx = (c0 + 1) % Dim;
+		s1 += get(1 + threadIdx.y, dx);
+		s1 += get(threadIdx.y, c0);
+		s1 += get(2 + threadIdx.y, c0);
+		s1 = s1 * 2 - 4;
+		float s0 = ss * 2 - 1;
+		E -= s0 * s1;
+		s0 *= H + s1;
+		if (s0 <= 0 || curand_uniform(state + tid + blockIdx.x * blockDim.x * blockDim.y)/* random(c0 - seed, yy + seed) */ < expf(-2 * s0 / T))set(c0);
+	}
+	//E -= H * (2 * M - 8);
+	unsigned char* s = (unsigned char*)&grid[yy * XX];
+	s[threadIdx.x] = p[tid];
+	dataM[tid] = M; dataE[tid] = E;
+	__syncthreads();
+	if (Dim > 512)if (tid < 256) { dataM[tid] += dataM[tid + 256]; dataE[tid] += dataE[tid + 256]; __syncthreads(); }
+	if (Dim > 256)if (tid < 128) { dataM[tid] += dataM[tid + 128]; dataE[tid] += dataE[tid + 128]; __syncthreads(); }
+	if (Dim > 128)if (tid < 64) { dataM[tid] += dataM[tid + 64]; dataE[tid] += dataE[tid + 64]; __syncthreads(); }
+	if (tid < 32)
+	{
+		dataM[tid] += dataM[tid + 32];
+		dataE[tid] += dataE[tid + 32]; __syncthreads();
+		dataM[tid] += dataM[tid + 16];
+		dataE[tid] += dataE[tid + 16]; __syncthreads();
+		dataM[tid] += dataM[tid + 8];
+		dataE[tid] += dataE[tid + 8]; __syncthreads();
+		dataM[tid] += dataM[tid + 4];
+		dataE[tid] += dataE[tid + 4]; __syncthreads();
+		dataM[tid] += dataM[tid + 2];
+		dataE[tid] += dataE[tid + 2]; __syncthreads();
+		dataM[tid] += dataM[tid + 1];
+		dataE[tid] += dataE[tid + 1]; __syncthreads();
+	}
+	if (tid == 0)
+	{
+		MList[blockIdx.x] = dataM[0];
+		EList[blockIdx.x] = dataE[0];
+	}
+	//as a matter of fact, we can add M, E here
+#undef get
+#undef set
+}
+//This is used to create new ensembles and count MList, EList (still need to reduce) and Table, used for one point.
+template<unsigned int Dim>__global__ void ising(unsigned long long* grid, float H, float T, int* MList, float* EList, float* table, int step, curandState* state)
+{
+	constexpr unsigned int XX = Dim / 64;
+	__shared__ unsigned long long subGrid[6][XX];
+	__shared__ int dataM[Dim / 2];
+	__shared__ float dataE[Dim / 2];
+	unsigned int yy(blockIdx.x * 4 + threadIdx.y);
+	int tid(threadIdx.y * blockDim.x + threadIdx.x);
+	if (tid < 6 * XX)
+	{
+		unsigned int gy(tid / XX);
+		unsigned int gx(tid % XX);
+		subGrid[gy][gx] = grid[((blockIdx.x * 4 + gy + Dim - 1) % Dim) * XX + gx];
+	}
+	__syncthreads();
+	int M(0);
+	float E(0);
+	unsigned char* p((unsigned char*)(subGrid[1]));
+#define get(y, x) ((subGrid[y][x>>6]>>(x&63))&1)
+#define set(ff) ((p[tid]^=(1<<(ff&7))))
+	int _step(step ^ (yy % 2));
+	int d0(threadIdx.x * 8 + _step);
+	for (int c0(d0); c0 < d0 + 8; c0 += 2)
+	{
+		int dx((c0 + Dim - 1) % Dim);
+		int s1 = get(1 + threadIdx.y, dx);
+		table[yy * Dim + dx] += s1; M += s1;
+		int ss = get(1 + threadIdx.y, c0);
+		table[yy * Dim + c0] += ss; M += ss;
+		dx = (c0 + 1) % Dim;
+		s1 += get(1 + threadIdx.y, dx);
+		s1 += get(threadIdx.y, c0);
+		s1 += get(2 + threadIdx.y, c0);
+		s1 = s1 * 2 - 4;
+		float s0 = ss * 2 - 1;
+		E -= s0 * s1;
+		s0 *= H + s1;
+		if (s0 <= 0 || curand_uniform(state + tid + blockIdx.x * blockDim.x * blockDim.y)/* random(c0 - seed, yy + seed) */ < expf(-2 * s0 / T))set(c0);
+	}
+	//E -= H * (2 * M - 8);
+	unsigned char* s = (unsigned char*)&grid[yy * XX];
+	s[threadIdx.x] = p[tid];
+	dataM[tid] = M;
+	dataE[tid] = E;
+	__syncthreads();
+	if (Dim > 512)if (tid < 256) { dataM[tid] += dataM[tid + 256]; dataE[tid] += dataE[tid + 256]; __syncthreads(); }
+	if (Dim > 256)if (tid < 128) { dataM[tid] += dataM[tid + 128]; dataE[tid] += dataE[tid + 128]; __syncthreads(); }
+	if (Dim > 128)if (tid < 64) { dataM[tid] += dataM[tid + 64]; dataE[tid] += dataE[tid + 64]; __syncthreads(); }
+	if (tid < 32)
+	{
+		dataM[tid] += dataM[tid + 32];
+		dataE[tid] += dataE[tid + 32]; __syncthreads();
+		dataM[tid] += dataM[tid + 16];
+		dataE[tid] += dataE[tid + 16]; __syncthreads();
+		dataM[tid] += dataM[tid + 8];
+		dataE[tid] += dataE[tid + 8]; __syncthreads();
+		dataM[tid] += dataM[tid + 4];
+		dataE[tid] += dataE[tid + 4]; __syncthreads();
+		dataM[tid] += dataM[tid + 2];
+		dataE[tid] += dataE[tid + 2]; __syncthreads();
+		dataM[tid] += dataM[tid + 1];
+		dataE[tid] += dataE[tid + 1]; __syncthreads();
+	}
+	if (tid == 0)
+	{
+		MList[blockIdx.x] = dataM[0];
+		EList[blockIdx.x] = dataE[0];
+	}
+	//as a matter of fact, we can add M, E here
+#undef get
+#undef set
+}
+//This is used to reduce MList and EList.
+template<unsigned int Dim>__global__ void reduce(int* MList, float* EList, int* M, float* E, float H)
+{
+	constexpr unsigned int sz = Dim / 8;
+	__shared__ int dataM[sz];
+	__shared__ float dataE[sz];
+	int tid = threadIdx.x;
+	dataM[tid] = MList[tid] + MList[tid + sz];
+	dataE[tid] = EList[tid] + EList[tid + sz];
+	__syncthreads();
+	if (Dim > 512)if (tid < 64) { dataM[tid] += dataM[tid + 64]; dataE[tid] += dataE[tid + 64]; __syncthreads(); }
+	if (Dim > 256)if (tid < 32) { dataM[tid] += dataM[tid + 32]; dataE[tid] += dataE[tid + 32]; __syncthreads(); }
+	if (Dim > 128)if (tid < 16) { dataM[tid] += dataM[tid + 16]; dataE[tid] += dataE[tid + 16]; __syncthreads(); }
+	if (tid < 8)
+	{
+		dataM[tid] += dataM[tid + 8];
+		dataE[tid] += dataE[tid + 8]; __syncthreads();
+		dataM[tid] += dataM[tid + 4];
+		dataE[tid] += dataE[tid + 4]; __syncthreads();
+		dataM[tid] += dataM[tid + 2];
+		dataE[tid] += dataE[tid + 2]; __syncthreads();
+		dataM[tid] += dataM[tid + 1];
+		dataE[tid] += dataE[tid + 1]; __syncthreads();
+	}
+	if (tid == 0)
+	{
+		int MM = dataM[0];
+		float EE = dataE[0];
+		float gg = 2 * MM;
+		gg -= Dim * Dim;
+		EE -= H * gg;
+		*M = MM;
+		*E = EE;
 	}
 }
-template<>__global__ void addM<256u>(unsigned long long* grid, float* table)
+
+
+//template<unsigned int Dim>__global__ void calcBarM(unsigned long long* grid, float* M);
+//template<unsigned int Dim>__global__ void addM(unsigned long long* grid, float* table);
+//template<>__global__ void calcBarM<256u>(unsigned long long* grid, float* M)
+//{
+//	//gd: {1, 1, 1}, threads: {32, 1, 1}
+//	__shared__ volatile int ahh[32];
+//	int N(0);
+//	grid += threadIdx.x * 32;
+//	for (int c0(0); c0 < 32; ++c0)
+//	{
+//		unsigned long long gg = grid[c0];
+//		unsigned int n;
+//		asm("popc.b64 %0, %1;": "=r"(n) : "l"(gg));
+//		N += n;
+//	}
+//	ahh[threadIdx.x] = N;
+//	if (threadIdx.x < 16)ahh[threadIdx.x] += ahh[threadIdx.x + 16];
+//	if (threadIdx.x < 8)ahh[threadIdx.x] += ahh[threadIdx.x + 8];
+//	if (threadIdx.x < 4)ahh[threadIdx.x] += ahh[threadIdx.x + 4];
+//	if (threadIdx.x < 2)ahh[threadIdx.x] += ahh[threadIdx.x + 2];
+//	if (!threadIdx.x)
+//	{
+//		N = ahh[0] + ahh[1];
+//		*M = 2 * float(N) / 65536 - 1;
+//	}
+//}
+//template<>__global__ void addM<256u>(unsigned long long* grid, float* table)
+//{
+//	//gd: {256, 1, 1}, threads: {32, 1, 1}
+//	unsigned char a(((unsigned char*)(grid + 4 * blockIdx.x))[threadIdx.x]);
+//	table += 256 * blockIdx.x + 8 * threadIdx.x;
+//	for (int c0(0); c0 < 8; ++c0)
+//		table[c0] += (a >> c0) & 1;
+//}
+//void printGrid(unsigned long long* grid)
+//{
+//	char t[5];
+//	std::string ahh;
+//	for (int c0(0); c0 < 4 * gridDim; ++c0)
+//	{
+//		unsigned long long ft(grid[c0]);
+//		for (int c1(0); c1 < 64; ++c1)
+//		{
+//			::sprintf(t, "%2d ", int((ft >> c1) & 1) * 2 - 1);
+//			ahh += t;
+//		}
+//		if (c0 % 4 == 3)
+//		{
+//			::sprintf(t, "\n");
+//			ahh += t;
+//		}
+//	}
+//	FILE* temp(::fopen("./grid.txt", "w+"));
+//	::fprintf(temp, "%s", ahh.c_str());
+//	::fclose(temp);
+//}
+
+void ising128(unsigned long long* grid, float H, float T, int step, curandState* state)
 {
-	//gd: {256, 1, 1}, threads: {32, 1, 1}
-	unsigned char a(((unsigned char*)(grid + 4 * blockIdx.x))[threadIdx.x]);
-	table += 256 * blockIdx.x + 8 * threadIdx.x;
-	for (int c0(0); c0 < 8; ++c0)
-		table[c0] += (a >> c0) & 1;
+	ising<128> << < IsingBlocks[4], IsingThreads[4], 0, 0 >> > (grid, H, T, step, state);
 }
-
-void printTable(float* table, int num)
+void ising256(unsigned long long* grid, float H, float T, int step, curandState* state)
 {
-	char t[50];
-	std::string ahh;
-	for (int c0(0); c0 < gridDim * gridDim; ++c0)
-	{
-		::sprintf(t, "%2.8f ", (table[c0] * 2) / num - 1);
-		ahh += t;
-		if (c0 % gridDim == 255)
-		{
-			::sprintf(t, "\n");
-			ahh += t;
-		}
-	}
-	FILE* temp(::fopen("./gridAverage.txt", "w+"));
-	::fprintf(temp, "%s", ahh.c_str());
-	::fclose(temp);
+	ising<256> << < IsingBlocks[5], IsingThreads[5], 0, 0 >> > (grid, H, T, step, state);
 }
-void printGrid(unsigned long long* grid)
+void ising512(unsigned long long* grid, float H, float T, int step, curandState* state)
 {
-	char t[5];
-	std::string ahh;
-	for (int c0(0); c0 < 4 * gridDim; ++c0)
-	{
-		unsigned long long ft(grid[c0]);
-		for (int c1(0); c1 < 64; ++c1)
-		{
-			::sprintf(t, "%2d ", int((ft >> c1) & 1) * 2 - 1);
-			ahh += t;
-		}
-		if (c0 % 4 == 3)
-		{
-			::sprintf(t, "\n");
-			ahh += t;
-		}
-	}
-	FILE* temp(::fopen("./grid.txt", "w+"));
-	::fprintf(temp, "%s", ahh.c_str());
-	::fclose(temp);
+	ising<512> << < IsingBlocks[6], IsingThreads[6], 0, 0 >> > (grid, H, T, step, state);
 }
-
-void calcOnePoint(float H, float T, unsigned int cycles, unsigned int num,
-	int seed, unsigned long long* grid, unsigned long long* gridHost)
+void ising1024(unsigned long long* grid, float H, float T, int step, curandState* state)
 {
+	ising<1024> << < IsingBlocks[7], IsingThreads[7], 0, 0 >> > (grid, H, T, step, state);
 }
-void calcOnePoint(float H, float T, unsigned int cycles, unsigned int num,
-	int seed, unsigned long long* grid, unsigned long long* gridHost, float* table, float* tableHost)
+void ising128(unsigned long long* grid, float H, float T, int* MList, float* EList, int step, curandState* state)
 {
-
+	ising<128> << < IsingBlocks[4], IsingThreads[4], 0, 0 >> > (grid, H, T, MList, EList, step, state);
 }
-
-
-int main(int argc, char** argv)
+void ising256(unsigned long long* grid, float H, float T, int* MList, float* EList, int step, curandState* state)
 {
-	//unsigned int memSize = sizeof(float) * gridDim * gridDim;
-	//float* originGrid((float*)malloc(memSize));
-	//float* grid;
-
-	//[Book1]Sheet2!1[1]:256[256]
-	unsigned int gridSize = sizeof(unsigned long long) * 4 * gridDim;
-	unsigned int tableSize = sizeof(float) * gridDim * gridDim;
-	unsigned long long* gridHost((unsigned long long*)malloc(gridSize));
-	float* tableHost((float*)::malloc(tableSize));
-
-	unsigned long long* grid;
-	float* table;
-	float* Md;
-	std::mt19937 mt(0);
-	cudaMalloc(&Md, 4);
-	cudaMalloc(&grid, gridSize);
-	cudaMalloc(&table, tableSize);
-	dim3  gd(64, 1, 1);
-	dim3  threads(32, 4, 1);
-	float H1 = 0.02941, H2 = 0;
-	float T, T1 = 1.5, T2 = 2 * 2.268;
-	int nH = 0;
-	int nT = 0;
-	int cycles = 10000;
-	int num = 1000;
-	::scanf("%d", &cycles);
-	::scanf("%d", &num);
-	H2 -= H1;
-	H2 /= nH ? nH : 1;
-	T2 -= T1;
-	T2 /= nT ? nT : 1;
-	char t[100];
-	std::string answer;
-	//for (int c2(0); c2 < gridDim * gridDim; ++c2)
-		//originGrid[c2] =/* rd(mt) ? 1 :*/ -1;
-
-	std::uniform_int_distribution<unsigned long long> gg;
-	std::uniform_real_distribution<float> rd(0, 1.0f);
-	for (int c0(0); c0 < gridDim; ++c0)
-	{
-		unsigned long long s;
-		if (c0 % 2)s = 0xaaaaaaaaaaaaaaaa;
-		else s = 0x5555555555555555;
-		for (int c1(0); c1 < 4; ++c1)
-			for (int c2(0); c2 < 64; ++c2)
-			{
-				gridHost[c0 * 4 + c1] = gg(mt)/*s*/;
-			}
-	}
-	memset(tableHost, 0, tableSize);
-
-
-	for (int c0(0); c0 <= nH; ++c0)
-	{
-		if (abs(H1) < 1e-5)H1 = 0;
-		T = T1;
-		for (int c1(0); c1 <= nT; ++c1)
-		{
-			//cudaDeviceSynchronize();
-			cudaMemcpy(grid, gridHost, gridSize, cudaMemcpyHostToDevice);
-			for (int c2(0); c2 < cycles; ++c2)
-			{
-				ising << < gd, threads, 0, 0 >> > (grid, H1, T, 0, rd(mt));
-				ising << < gd, threads, 0, 0 >> > (grid, H1, T, 1, rd(mt));
-			}
-
-			cudaMemcpy(table, tableHost, tableSize, cudaMemcpyHostToDevice);
-			for (int c2(0); c2 < num; ++c2)
-			{
-				ising << < gd, threads, 0, 0 >> > (grid, H1, T, 0, rd(mt));
-				ising << < gd, threads, 0, 0 >> > (grid, H1, T, 1, rd(mt));
-				addM << <dim3(256, 1, 1), dim3(32, 1, 1) >> > (grid, table);
-				//float m;
-				//calcBarM_optimize_1 << <dim3(1, 1, 1), dim3(32, 1, 1) >> > (grid, Md);
-				//cudaMemcpy(&m, Md, 4, cudaMemcpyDeviceToHost);
-				//M += m;
-				//cudaMemcpy(gridHost, grid, gridSize, cudaMemcpyDeviceToHost);
-			}
-			//cudaEventSynchronize(start);
-			//cudaEventSynchronize(stop);
-			//cudaEventElapsedTime(&elapsedTime, start, stop);
-			//::printf("%02d %02d\n", c0, c1);
-			::printf("%.8f %.8f %.8f\t", H1, T, M);
-			::sprintf(t, "%.8f %.8f %.8f\n", H1, T, M);
-			answer += t;
-			T += T2;
-			//printf("%f ms\n", elapsedTime);
-		}
-		H1 += H2;
-	}
-	cudaMemcpy(tableHost, table, tableSize, cudaMemcpyDeviceToHost);
-	printTable(tableHost, num);
-	//cudaMemcpy(originGrid, grid, memSize, cudaMemcpyDeviceToHost);
-	//printGrid(originGrid);
-	//::printf(answer.c_str());
-	FILE* temp(::fopen("./answer.txt", "w+"));
-	::fprintf(temp, "%s", answer.c_str());
-	::fclose(temp);
-	cudaFree(grid);
-	cudaFree(Md);
-	cudaFree(table);
-	free(gridHost);
-	free(tableHost);
+	ising<256> << < IsingBlocks[5], IsingThreads[5], 0, 0 >> > (grid, H, T, MList, EList, step, state);
+}
+void ising512(unsigned long long* grid, float H, float T, int* MList, float* EList, int step, curandState* state)
+{
+	ising<512> << < IsingBlocks[6], IsingThreads[6], 0, 0 >> > (grid, H, T, MList, EList, step, state);
+}
+void ising1024(unsigned long long* grid, float H, float T, int* MList, float* EList, int step, curandState* state)
+{
+	ising<1024> << < IsingBlocks[7], IsingThreads[7], 0, 0 >> > (grid, H, T, MList, EList, step, state);
+}
+void ising128(unsigned long long* grid, float H, float T, int* MList, float* EList, float* table, int step, curandState* state)
+{
+	ising<128> << < IsingBlocks[4], IsingThreads[4], 0, 0 >> > (grid, H, T, MList, EList, table, step, state);
+}
+void ising256(unsigned long long* grid, float H, float T, int* MList, float* EList, float* table, int step, curandState* state)
+{
+	ising<256> << < IsingBlocks[5], IsingThreads[5], 0, 0 >> > (grid, H, T, MList, EList, table, step, state);
+}
+void ising512(unsigned long long* grid, float H, float T, int* MList, float* EList, float* table, int step, curandState* state)
+{
+	ising<512> << < IsingBlocks[6], IsingThreads[6], 0, 0 >> > (grid, H, T, MList, EList, table, step, state);
+}
+void ising1024(unsigned long long* grid, float H, float T, int* MList, float* EList, float* table, int step, curandState* state)
+{
+	ising<1024> << < IsingBlocks[7], IsingThreads[7], 0, 0 >> > (grid, H, T, MList, EList, table, step, state);
+}
+void reduce128(int* MList, float* EList, int* M, float* E, float H)
+{
+	reduce<128> << < dim3(1, 1, 1), ReduceThreads[4], 0, 0 >> > (MList, EList, M, E, H);
+}
+void reduce256(int* MList, float* EList, int* M, float* E, float H)
+{
+	reduce<256> << < dim3(1, 1, 1), ReduceThreads[5], 0, 0 >> > (MList, EList, M, E, H);
+}
+void reduce512(int* MList, float* EList, int* M, float* E, float H)
+{
+	reduce<512> << < dim3(1, 1, 1), ReduceThreads[6], 0, 0 >> > (MList, EList, M, E, H);
+}
+void reduce1024(int* MList, float* EList, int* M, float* E, float H)
+{
+	reduce<1024> << < dim3(1, 1, 1), ReduceThreads[7], 0, 0 >> > (MList, EList, M, E, H);
 }
