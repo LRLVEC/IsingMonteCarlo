@@ -40,11 +40,13 @@
         "platform/win32/environment": "",
         "platform/win32/executable": "E:/files/C++/CUDA/IsingMonteCarlo/x64/Release/Ising3D.exe",
         "platform/win32/executable/history": [
-            "E:/files/C++/CUDA/IsingMonteCarlo/x64/Release/Ising3D.exe"
+            "E:/files/C++/CUDA/IsingMonteCarlo/x64/Release/Ising3D.exe",
+            "E:/files/C++/CUDA/IsingMonteCarlo/x64/Release/Ising3D_optimize.exe"
         ],
         "platform/win32/workingdir": "E:/files/C++/CUDA/IsingMonteCarlo/Ising3D/profile",
         "platform/win32/workingdir/history": [
-            "E:/files/C++/CUDA/IsingMonteCarlo/Ising3D/profile"
+            "E:/files/C++/CUDA/IsingMonteCarlo/Ising3D/profile",
+            "E:/files/C++/CUDA/IsingMonteCarlo/Ising3D_optimize/profile"
         ],
         "platform/windows/device": "localhost"
     },

@@ -13,6 +13,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LinkTest", "LinkTest\LinkTe
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Ising3D", "Ising3D\Ising3D.vcxproj", "{010BE5BB-E78B-4A90-8C9D-EEFA7A8D083F}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LatticeIsing3D", "LatticeIsing3D\LatticeIsing3D.vcxproj", "{CFD329F7-B5A4-4826-956A-F2DDBAB1B2B3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -53,6 +55,12 @@ Global
 		{010BE5BB-E78B-4A90-8C9D-EEFA7A8D083F}.Release|x64.ActiveCfg = Release|x64
 		{010BE5BB-E78B-4A90-8C9D-EEFA7A8D083F}.Release|x64.Build.0 = Release|x64
 		{010BE5BB-E78B-4A90-8C9D-EEFA7A8D083F}.Release|x86.ActiveCfg = Release|x64
+		{CFD329F7-B5A4-4826-956A-F2DDBAB1B2B3}.Debug|x64.ActiveCfg = Debug|x64
+		{CFD329F7-B5A4-4826-956A-F2DDBAB1B2B3}.Debug|x64.Build.0 = Debug|x64
+		{CFD329F7-B5A4-4826-956A-F2DDBAB1B2B3}.Debug|x86.ActiveCfg = Debug|x64
+		{CFD329F7-B5A4-4826-956A-F2DDBAB1B2B3}.Release|x64.ActiveCfg = Release|x64
+		{CFD329F7-B5A4-4826-956A-F2DDBAB1B2B3}.Release|x64.Build.0 = Release|x64
+		{CFD329F7-B5A4-4826-956A-F2DDBAB1B2B3}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -116,7 +116,7 @@ __global__ void initGrid(unsigned long long* grid, curandState* states, unsigned
 	}
 	states[stateIdx] = state;
 }
-template<unsigned long long dim>__global__ void ising3d(unsigned long long* grid, float H, float T, int step, curandState* states)
+template<unsigned long long dim>__global__ void ising3d(unsigned long long* grid, float mu, float T, int step, curandState* states)
 {
 	constexpr unsigned int dimM1(dim - 1);
 	constexpr unsigned int bandWidth(256 / (dim / 256));
@@ -132,8 +132,12 @@ template<unsigned long long dim>__global__ void ising3d(unsigned long long* grid
 	int randIdx(blockIdx.y * layerSize + (threadIdx.y + blockIdx.x * bandWidth) * rowLength + threadIdx.x);
 	curandState state(states[randIdx]);
 	//build table
-	if (threadIdx.x < 2 && threadIdx.y < 7)
-		expDeltaE[threadIdx.x][threadIdx.y] = expf((2 - 4 * int(threadIdx.x)) * (H + float(2 * threadIdx.y) - 6) / T);
+	//if (threadIdx.x < 2 && threadIdx.y < 7)
+	//	expDeltaE[threadIdx.x][threadIdx.y] = expf((2 - 4 * int(threadIdx.x)) * (mu + float(2 * threadIdx.y) - 6) / T);
+	if (threadIdx.x == 0 && threadIdx.y < 7)
+		expDeltaE[threadIdx.x][threadIdx.y] = expf((float(threadIdx.y) - mu) / T);
+	else if (threadIdx.x == 1 && threadIdx.y < 7)
+		expDeltaE[threadIdx.x][threadIdx.y] = expf((mu - float(threadIdx.y)) / T);
 	//gather the extra rows, for dim == 1024, 512
 	if constexpr (dim > 256)
 	{
@@ -220,7 +224,7 @@ template<unsigned long long dim>__global__ void ising3d(unsigned long long* grid
 #undef get
 #undef set
 }
-template<unsigned long long dim>__global__ void ising3dOpt(unsigned long long* grid, float H, float T, int step, curandState* states)
+template<unsigned long long dim>__global__ void ising3dOpt(unsigned long long* grid, float mu, float T, int step, curandState* states)
 {
 	constexpr unsigned int dimM1(dim - 1);
 	constexpr unsigned int bandWidth(256 / (dim / 256));
@@ -236,8 +240,12 @@ template<unsigned long long dim>__global__ void ising3dOpt(unsigned long long* g
 	int randIdx(blockIdx.y * layerSize + (y + blockIdx.x * bandWidth) * rowLength + threadIdx.y);
 	curandState state(states[randIdx]);
 	//build table
-	if (threadIdx.y < 2 && y < 7)
-		expDeltaE[threadIdx.y][y] = expf((2 - 4 * int(y)) * (H + float(2 * threadIdx.x) - 6) / T);
+	//if (threadIdx.x < 2 && threadIdx.y < 7)
+		//expDeltaE[threadIdx.x][threadIdx.y] = expf((2 - 4 * int(threadIdx.x)) * (H + float(2 * threadIdx.y) - 6) / T);
+	if (threadIdx.y == 0 && y < 7)
+		expDeltaE[threadIdx.y][y] = expf((float(y) - mu) / T);
+	else if (threadIdx.y == 1 && y < 7)
+		expDeltaE[threadIdx.y][y] = expf((mu - float(y)) / T);
 	unsigned int const tx(threadIdx.x & (rowLength - 1)), ty(threadIdx.y * 32 / rowLength + threadIdx.z * 32);
 	unsigned long long center;
 	unsigned long long nearby[3];
@@ -340,7 +348,7 @@ template<unsigned long long dim>__global__ void ising3dOpt(unsigned long long* g
 #undef get
 #undef set
 }
-template<unsigned long long dim>__global__ void ising3d(unsigned long long* grid, float H, float T, long long* MList, long long* EList, int step, curandState* states)
+template<unsigned long long dim>__global__ void ising3d(unsigned long long* grid, float mu, float T, long long* NList, long long* EList, int step, curandState* states)
 {
 	constexpr unsigned int dimM1(dim - 1);
 	constexpr unsigned int bandWidth(256 / (dim / 256));
@@ -354,11 +362,15 @@ template<unsigned long long dim>__global__ void ising3d(unsigned long long* grid
 	unsigned int c0e(c0 + blockHeight);
 	unsigned int idx(0);
 	int randIdx(blockIdx.y * layerSize + (threadIdx.y + blockIdx.x * bandWidth) * rowLength + threadIdx.x);
-	int sumM(0), sumE(0);
+	int sumN(0), sumE(0);
 	curandState state(states[randIdx]);
 	//build table
-	if (threadIdx.x < 2 && threadIdx.y < 7)
-		expDeltaE[threadIdx.x][threadIdx.y] = expf((2 - 4 * int(threadIdx.x)) * (H + float(2 * threadIdx.y) - 6) / T);
+	//if (threadIdx.x < 2 && threadIdx.y < 7)
+		//expDeltaE[threadIdx.x][threadIdx.y] = expf((2 - 4 * int(threadIdx.x)) * (H + float(2 * threadIdx.y) - 6) / T);
+	if (threadIdx.x == 0 && threadIdx.y < 7)
+		expDeltaE[threadIdx.x][threadIdx.y] = expf((float(threadIdx.y) - mu) / T);
+	else if (threadIdx.x == 1 && threadIdx.y < 7)
+		expDeltaE[threadIdx.x][threadIdx.y] = expf((mu - float(threadIdx.y)) / T);
 	//gather the extra rows, for dim == 1024, 512
 	if constexpr (dim > 256)
 	{
@@ -436,7 +448,8 @@ template<unsigned long long dim>__global__ void ising3d(unsigned long long* grid
 			for (int c2(0); c2 < 4; ++c2)s0 += get(nearby[c2], c1);
 			int ss(get(center, c1));
 			if (curand_uniform(&state) < expDeltaE[ss][s0])set(c1);
-			sumM += ss + s1;
+			sumN += ss + s1;
+			//...
 			sumE -= (2 * ss - 1) * (2 * s0 - 6);
 			s0 = s1;
 		}
@@ -447,34 +460,34 @@ template<unsigned long long dim>__global__ void ising3d(unsigned long long* grid
 #undef get
 #undef set
 	constexpr unsigned int blockSize(getBlockSize(dim));
-	__shared__ int gatherM[blockSize], gatherE[blockSize];
+	__shared__ int gatherN[blockSize], gatherE[blockSize];
 	unsigned int id(threadIdx.x + threadIdx.y * rowLength);
-	gatherM[id] = sumM;
+	gatherN[id] = sumN;
 	gatherE[id] = sumE;
 	__syncthreads();
-	if constexpr (blockSize >= 1024)if (id < 512) { gatherM[id] += gatherM[id + 512]; gatherE[id] += gatherE[id + 512]; __syncthreads(); }
-	if constexpr (blockSize >= 512)if (id < 256) { gatherM[id] += gatherM[id + 256]; gatherE[id] += gatherE[id + 256]; __syncthreads(); }
-	if constexpr (blockSize >= 256)if (id < 128) { gatherM[id] += gatherM[id + 128]; gatherE[id] += gatherE[id + 128]; __syncthreads(); }
-	if constexpr (blockSize >= 128)if (id < 64) { gatherM[id] += gatherM[id + 64]; gatherE[id] += gatherE[id + 64]; __syncthreads(); }
+	if constexpr (blockSize >= 1024)if (id < 512) { gatherN[id] += gatherN[id + 512]; gatherE[id] += gatherE[id + 512]; __syncthreads(); }
+	if constexpr (blockSize >= 512)if (id < 256) { gatherN[id] += gatherN[id + 256]; gatherE[id] += gatherE[id + 256]; __syncthreads(); }
+	if constexpr (blockSize >= 256)if (id < 128) { gatherN[id] += gatherN[id + 128]; gatherE[id] += gatherE[id + 128]; __syncthreads(); }
+	if constexpr (blockSize >= 128)if (id < 64) { gatherN[id] += gatherN[id + 64]; gatherE[id] += gatherE[id + 64]; __syncthreads(); }
 	if (id < 32)//blockSize must be greater than 64...
 	{
-		gatherM[id] += gatherM[id + 32];
+		gatherN[id] += gatherN[id + 32];
 		gatherE[id] += gatherE[id + 32]; __syncthreads();
-		gatherM[id] += gatherM[id + 16];
+		gatherN[id] += gatherN[id + 16];
 		gatherE[id] += gatherE[id + 16]; __syncthreads();
-		gatherM[id] += gatherM[id + 8];
+		gatherN[id] += gatherN[id + 8];
 		gatherE[id] += gatherE[id + 8]; __syncthreads();
-		gatherM[id] += gatherM[id + 4];
+		gatherN[id] += gatherN[id + 4];
 		gatherE[id] += gatherE[id + 4]; __syncthreads();
-		gatherM[id] += gatherM[id + 2];
+		gatherN[id] += gatherN[id + 2];
 		gatherE[id] += gatherE[id + 2]; __syncthreads();
-		gatherM[id] += gatherM[id + 1];
+		gatherN[id] += gatherN[id + 1];
 		gatherE[id] += gatherE[id + 1]; __syncthreads();
 	}
 	if (id == 0)
 	{
 		unsigned int blockId(blockIdx.x + blockIdx.y * gridDim.x);
-		MList[blockId] = gatherM[0];
+		NList[blockId] = gatherN[0];
 		EList[blockId] = gatherE[0];
 	}
 }
@@ -584,10 +597,11 @@ constexpr unsigned int chooseIdx(unsigned long long dim)
 int main()
 {
 	File file("./");
-	float T(1.1);
-	float H0(1e-1);
-	float H1(0);
-	::printf("T: %f\nH0: %f\nH1: %f\n", T, H0, H1);
+	float T(0.1);
+	float mu0(3);
+	float mu1(3);
+	unsigned int steps(10);
+	::printf("T: %f\nmu0: %f\nmu1: %f\n", T, mu0, mu1);
 	Timer timer;
 	std::mt19937 mt(time(0));
 	std::uniform_int_distribution<unsigned long long>rd;
@@ -638,7 +652,10 @@ int main()
 		timer.print("Read states: ");
 	}
 
-	for (unsigned long long c0(0); c0 < 1; ++c0)
+	float dmu((mu1 - mu0) / steps);
+	float mu(mu0);
+
+	for (unsigned long long c0(0); c0 < steps; ++c0)
 	{
 		cudaDeviceSynchronize();
 		//timer.begin();
@@ -647,12 +664,8 @@ int main()
 		//timer.end();
 		//timer.print("Init Grid: ");
 		timer.begin();
-		float dH(H0 - H1);
 		for (unsigned long long c1(0); c1 < 1000; ++c1)
 		{
-			float H;
-			if (c1 < 100)H = H0;
-			else H = H1;
 			/*if (c1 % 50 == 0)
 			{
 				isingReduction <1024> << <ReductionBlockSize[idx], 1024 >> > (gridDevice, sumDevice, spinNum / 64);
@@ -661,24 +674,24 @@ int main()
 				cudaMemcpy(&sumAnswer, sumSumDevice, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
 				::printf("%d: %f, %lf\n", c1, H, double(2 * sumAnswer) / spinNum - 1);
 			}*/
-			ising3d<dim> << <Ising3DBlockSize[idx], Ising3DThreadSize[idx] >> > (gridDevice, H, T, 0, statesDevice);
-			ising3d<dim> << <Ising3DBlockSize[idx], Ising3DThreadSize[idx] >> > (gridDevice, H, T, 1, statesDevice);
+			ising3d<dim> << <Ising3DBlockSize[idx], Ising3DThreadSize[idx] >> > (gridDevice, mu, T, 0, statesDevice);
+			ising3d<dim> << <Ising3DBlockSize[idx], Ising3DThreadSize[idx] >> > (gridDevice, mu, T, 1, statesDevice);
 			//ising3dOpt<dim> << <Ising3DBlockSize[idx], Ising3DThreadSizeOpt[idx] >> > (gridDevice, H, T, 0, statesDevice);
 			//ising3dOpt<dim> << <Ising3DBlockSize[idx], Ising3DThreadSizeOpt[idx] >> > (gridDevice, H, T, 1, statesDevice);
 		}
 		cudaDeviceSynchronize();
 		timer.end();
-		timer.print("Ising3D: ");
+		//timer.print("LatticeIsing3D: ");
 
 		//timer.begin();
-		isingReduction <1024> << <ReductionBlockSize[idx], 1024 >> > (gridDevice, sumDevice, spinNum / 64);
-		reduction<unsigned long long, ReductionBlockSize[idx]> << <1, ReductionBlockSize[idx] >> > (sumDevice, (unsigned long long*)sumSumDevice, ReductionBlockSize[idx]);
-		unsigned long long sumAnswer;
-		cudaMemcpy(&sumAnswer, sumSumDevice, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
-		//timer.end();
-		//timer.print("Reduce: ");
-		double M(double(2 * sumAnswer) / spinNum - 1);
-		::printf("Average M:\t%lf\n", M);
+		//isingReduction <1024> << <ReductionBlockSize[idx], 1024 >> > (gridDevice, sumDevice, spinNum / 64);
+		//reduction<unsigned long long, ReductionBlockSize[idx]> << <1, ReductionBlockSize[idx] >> > (sumDevice, (unsigned long long*)sumSumDevice, ReductionBlockSize[idx]);
+		//unsigned long long sumAnswer;
+		//cudaMemcpy(&sumAnswer, sumSumDevice, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
+		////timer.end();
+		////timer.print("Reduce: ");
+		//double M(double(2 * sumAnswer) / spinNum - 1);
+		//::printf("Average M:\t%lf\n", M);
 		/*if (abs(M) < 0.99)
 		{
 			for (unsigned long long cc(128); cc < 129; ++cc)
@@ -696,17 +709,18 @@ int main()
 			}
 		}*/
 
-		long long MLL, ELL;
-		double E;
-		ising3d<dim> << <Ising3DBlockSize[idx], Ising3DThreadSize[idx] >> > (gridDevice, H1, T, 0, statesDevice);
-		ising3d<dim> << <Ising3DBlockSize[idx], Ising3DThreadSize[idx] >> > (gridDevice, H1, T, sumMDevice, sumEDevice, 1, statesDevice);
+		long long NLL, ELL;
+		double n, E;
+		ising3d<dim> << <Ising3DBlockSize[idx], Ising3DThreadSize[idx] >> > (gridDevice, mu, T, 0, statesDevice);
+		ising3d<dim> << <Ising3DBlockSize[idx], Ising3DThreadSize[idx] >> > (gridDevice, mu, T, sumMDevice, sumEDevice, 1, statesDevice);
 		reduction<long long, ReductionMBlockSize[idx]> << <1, ReductionMBlockSize[idx] >> > (sumMDevice, (long long*)sumSumDevice, ReductionMBlockSize[idx]);
-		cudaMemcpy(&MLL, sumSumDevice, sizeof(long long), cudaMemcpyDeviceToHost);
+		cudaMemcpy(&NLL, sumSumDevice, sizeof(long long), cudaMemcpyDeviceToHost);
 		reduction<long long, ReductionMBlockSize[idx]> << <1, ReductionMBlockSize[idx] >> > (sumEDevice, (long long*)sumSumDevice, ReductionMBlockSize[idx]);
 		cudaMemcpy(&ELL, sumSumDevice, sizeof(long long), cudaMemcpyDeviceToHost);
-		M = double(2 * MLL) / spinNum - 1;
-		E = double(ELL) / spinNum - M * H1;
-		::printf("M: %lf\tE: %lf\n", M, E);
+		n = double(NLL) / spinNum;
+		E = double(ELL) / spinNum - n * mu1;
+		::printf("mu: %lf\tn: %lf\tE: %lf\n", mu, n, E);
+		mu += dmu;
 	}
 
 	timer.begin();
